@@ -1,53 +1,43 @@
 import mysql.connector
 import os
 import pandas as pd 
-from src.extract import extract
-from src.transform import transform_players, transform_scores
-from src.load import load_players, load_scores
+from extract import extract
+from transform import transform_players, transform_scores
+from load import load_players, load_scores
 
 def main():
-    # 1. Configuration de la connexion via variables d'environnement
+    print("--- Démarrage du Pipeline ETL ---")
     try:
         conn = mysql.connector.connect(
             host=os.getenv('DB_HOST', 'db'),
             user=os.getenv('DB_USER', 'user'),
             password=os.getenv('DB_PASSWORD', 'password'),
             database=os.getenv('DB_NAME', 'gt_db'),
-            port=int(os.getenv('DB_PORT', 3306))
+            ssl_disabled=True
         )
-        print("Connexion à la base de données réussie.")
+        
+        # Chemins relatifs à la racine /app
+        df_p = extract('data/raw/Players.csv')
+        df_s = extract('data/raw/Scores.csv')
+
+        if df_p is not None and df_s is not None:
+            # Transformation
+            df_p_clean = transform_players(df_p)
+            valid_ids = df_p_clean['player_id'].tolist()
+            df_s_clean = transform_scores(df_s, valid_ids)
+
+            # Chargement (Ordre crucial pour les clés étrangères)
+            load_players(df_p_clean, conn)
+            load_scores(df_s_clean, conn)
+            print("Pipeline ETL terminé avec succès.")
+        else:
+            print("Erreur : Fichiers CSV introuvables.")
+
     except Exception as e:
-        print(f"Erreur de connexion : {e}")
-        return
-
-    try:
-        # --- ETAPE 1 : EXTRACTION ---
-        print("\n--- Phase d'extraction ---")
-        df_players_raw = extract('data/raw/Players.csv')
-        df_scores_raw = extract('data/raw/Scores.csv')
-
-        if df_players_raw is None or df_scores_raw is None:
-            return
-
-        # --- ETAPE 2 : TRANSFORMATION ---
-        print("\n--- Phase de transformation ---")
-        df_players_clean = transform_players(df_players_raw)
-        
-        # On récupère la liste des IDs valides pour filtrer les scores
-        valid_ids = df_players_clean['player_id'].tolist()
-        df_scores_clean = transform_scores(df_scores_raw, valid_ids)
-
-        # --- ETAPE 3 : CHARGEMENT ---
-        print("\n--- Phase de chargement ---")
-        load_players(df_players_clean, conn)
-        load_scores(df_scores_clean, conn)
-        
-        print("\nETL terminé avec succès !")
-
+        print(f"Erreur critique : {e}")
     finally:
-        if conn.is_connected():
+        if 'conn' in locals() and conn.is_connected():
             conn.close()
-            print("Connexion fermée.")
 
 if __name__ == "__main__":
     main()

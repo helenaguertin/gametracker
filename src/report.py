@@ -7,7 +7,8 @@ def generate_report():
             host=os.getenv('DB_HOST', 'db'),
             user=os.getenv('DB_USER', 'user'),
             password=os.getenv('DB_PASSWORD', 'password'),
-            database=os.getenv('DB_NAME', 'gt_db')
+            database=os.getenv('DB_NAME', 'gt_db'),
+            ssl_disabled=True
         )
         cursor = conn.cursor()
 
